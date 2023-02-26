@@ -1,102 +1,168 @@
+import React from "react";
+import { Route, Routes } from "react-router-dom";
+import axios from "axios";
+import Header from "./Components/Header";
+import Drawer from "./Components/Drawer";
+import AppContext from "./context";
+
+import Home from "./Pages/Home";
+import Favorites from "./Pages/Favorites";
+import Orders from "./Pages/Orders";
+
 function App() {
+  const [items, setItems] = React.useState([]);
+  const [cartItems, setCartItems] = React.useState([]);
+  const [favorites, setFavorites] = React.useState([]);
+  const [searchValue, setSearchValue] = React.useState("");
+  const [cartOpened, setCartOpened] = React.useState(false);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    async function fetchData() {
+      try {
+        const [cartResponse, favoritesResponse, itemsResponse] =
+          await Promise.all([
+            axios.get("https://60d62397943aa60017768e77.mockapi.io/cart"),
+            axios.get("https://60d62397943aa60017768e77.mockapi.io/favorites"),
+            axios.get("https://60d62397943aa60017768e77.mockapi.io/items"),
+          ]);
+
+        setIsLoading(false);
+        setCartItems(cartResponse.data);
+        setFavorites(favoritesResponse.data);
+        setItems(itemsResponse.data);
+      } catch (error) {
+        alert("Ошибка при запросе данных ;(");
+        console.error(error);
+      }
+    }
+
+    fetchData();
+  }, []);
+
+  const onAddToCart = async (obj) => {
+    try {
+      const findItem = cartItems.find(
+        (item) => Number(item.parentId) === Number(obj.id)
+      );
+      if (findItem) {
+        setCartItems((prev) =>
+          prev.filter((item) => Number(item.parentId) !== Number(obj.id))
+        );
+        await axios.delete(
+          `https://60d62397943aa60017768e77.mockapi.io/cart/${findItem.id}`
+        );
+      } else {
+        setCartItems((prev) => [...prev, obj]);
+        const { data } = await axios.post(
+          "https://60d62397943aa60017768e77.mockapi.io/cart",
+          obj
+        );
+        setCartItems((prev) =>
+          prev.map((item) => {
+            if (item.parentId === data.parentId) {
+              return {
+                ...item,
+                id: data.id,
+              };
+            }
+            return item;
+          })
+        );
+      }
+    } catch (error) {
+      alert("Ошибка при добавлении в корзину");
+      console.error(error);
+    }
+  };
+
+  const onRemoveItem = (id) => {
+    try {
+      axios.delete(`https://60d62397943aa60017768e77.mockapi.io/cart/${id}`);
+      setCartItems((prev) =>
+        prev.filter((item) => Number(item.id) !== Number(id))
+      );
+    } catch (error) {
+      alert("Ошибка при удалении из корзины");
+      console.error(error);
+    }
+  };
+
+  const onAddToFavorite = async (obj) => {
+    try {
+      if (favorites.find((favObj) => Number(favObj.id) === Number(obj.id))) {
+        axios.delete(
+          `https://60d62397943aa60017768e77.mockapi.io/favorites/${obj.id}`
+        );
+        setFavorites((prev) =>
+          prev.filter((item) => Number(item.id) !== Number(obj.id))
+        );
+      } else {
+        const { data } = await axios.post(
+          "https://60d62397943aa60017768e77.mockapi.io/favorites",
+          obj
+        );
+        setFavorites((prev) => [...prev, data]);
+      }
+    } catch (error) {
+      alert("Не удалось добавить в фавориты");
+      console.error(error);
+    }
+  };
+
+  const onChangeSearchInput = (event) => {
+    setSearchValue(event.target.value);
+  };
+
+  const isItemAdded = (id) => {
+    return cartItems.some((obj) => Number(obj.parentId) === Number(id));
+  };
+
   return (
-    <div className="wrapper clear">
-      <header className="d-flex justify-between align-center p-40">
-        <div className="d-flex align-center">
-          <img width={40} height={40} src="/img/logo.png" />
-          <div>
-            <h3 className="text-uppercase">Sneakers shop</h3>
-            <p className="opacity-5">Магазин лучших кроссовок</p>
-          </div>
+    <Routes>
+      <AppContext.Provider
+        value={{
+          items,
+          cartItems,
+          favorites,
+          isItemAdded,
+          onAddToFavorite,
+          onAddToCart,
+          setCartOpened,
+          setCartItems,
+        }}
+      >
+        <div className="wrapper clear">
+          <Drawer
+            items={cartItems}
+            onClose={() => setCartOpened(false)}
+            onRemove={onRemoveItem}
+            opened={cartOpened}
+          />
+
+          <Header onClickCart={() => setCartOpened(true)} />
+          <Route path="" exact>
+            <Home
+              items={items}
+              cartItems={cartItems}
+              searchValue={searchValue}
+              setSearchValue={setSearchValue}
+              onChangeSearchInput={onChangeSearchInput}
+              onAddToFavorite={onAddToFavorite}
+              onAddToCart={onAddToCart}
+              isLoading={isLoading}
+            />
+          </Route>
+          <Route path="favorites" exact>
+            <Favorites />
+          </Route>
+
+          <Route path="orders" exact>
+            <Orders />
+          </Route>
         </div>
-        <ul className="d-flex">
-          <li className="mr-30">
-            <img width={18} height={18} src="/img/cart.svg" />
-            <span>39$</span>
-          </li>
-          <li>
-            <img width={18} height={18} src="/img/user.svg" />
-          </li>
-        </ul>
-      </header>
-      <div className="content p-40">
-        <h1 className="mb-40">Все кроссовки</h1>
-        <div className="d-flex">
-          <div className="card">
-            <img
-              width={133}
-              height={112}
-              src="/img/sneakers/s1.jpg"
-              alt="Sneakers"
-            />
-            <h5>Мужские Кроссовки Nike Blazer Mid Suede</h5>
-            <div className="d-flex justify-between align-center">
-              <div className="d-flex flex-column">
-                <span>Cost</span>
-                <b>222$</b>
-              </div>
-              <button className="button">
-                <img width={11} height={11} src="/img/Plus.svg" alt="plus" />
-              </button>
-            </div>
-          </div>
-          <div className="card">
-            <img
-              width={133}
-              height={112}
-              src="/img/sneakers/s2.jpg"
-              alt="Sneakers"
-            />
-            <h5>Мужские Кроссовки Nike Air Max 270</h5>
-            <div className="d-flex justify-between align-center">
-              <div className="d-flex flex-column">
-                <span>Cost</span>
-                <b>222$</b>
-              </div>
-              <button className="button">
-                <img width={11} height={11} src="/img/Plus.svg" alt="plus" />
-              </button>
-            </div>
-          </div>
-          <div className="card">
-            <img
-              width={133}
-              height={112}
-              src="/img/sneakers/s3.jpg"
-              alt="Sneakers"
-            />
-            <h5>Мужские Кроссовки Nike Blazer Mid Suede</h5>
-            <div className="d-flex justify-between align-center">
-              <div className="d-flex flex-column">
-                <span>Cost</span>
-                <b>222$</b>
-              </div>
-              <button className="button">
-                <img width={11} height={11} src="/img/Plus.svg" alt="plus" />
-              </button>
-            </div>
-          </div>
-          <div className="card">
-            <img
-              width={133}
-              height={112}
-              src="/img/sneakers/s4.jpg"
-              alt="Sneakers"
-            />
-            <h5>Кроссовки Puma X Aka Boku Future Rider</h5>
-            <div className="d-flex justify-between align-center">
-              <div className="d-flex flex-column">
-                <span>Cost</span>
-                <b>222$</b>
-              </div>
-              <button className="button">
-                <img width={11} height={11} src="/img/Plus.svg" alt="plus" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+      </AppContext.Provider>
+    </Routes>
   );
 }
 
